@@ -1,8 +1,12 @@
 import json
+from typing import Optional, Dict, Any
 from db.models import Race, Skill, Guild, Player
 
 
-def process_race(race_info, nickname):
+def process_race(
+    race_info: Optional[Dict[str, Any]],
+    nickname: str
+) -> Optional[Race]:
     """Process race information and return race object."""
     if not race_info:
         print(f"Aviso: Jogador '{nickname}' sem raça")
@@ -28,7 +32,7 @@ def process_race(race_info, nickname):
     return race
 
 
-def process_skills(race_info, race):
+def process_skills(race_info: Optional[Dict[str, Any]], race: Race) -> None:
     """Process skills for a race."""
     if not isinstance(race_info, dict):
         return
@@ -52,7 +56,7 @@ def process_skills(race_info, race):
                 )
 
 
-def process_guild(guild_info):
+def process_guild(guild_info: Optional[Dict[str, Any]]) -> Optional[Guild]:
     """Process guild information and return guild object."""
     guild = None
     if guild_info and isinstance(guild_info, dict):
@@ -67,44 +71,56 @@ def process_guild(guild_info):
     return guild
 
 
-def process_player(nickname, player_data):
+def process_player(nickname: str, player_data: Dict[str, Any]) -> None:
     """Process individual player data."""
     if not isinstance(player_data, dict):
         msg = f"Dados do jogador '{nickname}' ignorados"
         print(f"{msg} - não são um dicionário: {player_data}")
         return
 
-    # Process race
-    race_info = player_data.get("race")
-    race = process_race(race_info, nickname)
-    if not race:
-        return
+    try:
+        # Process race
+        race_info = player_data.get("race")
+        race = process_race(race_info, nickname)
+        if not race:
+            return
 
-    # Process skills
-    process_skills(race_info, race)
+        # Process skills
+        process_skills(race_info, race)
 
-    # Process guild
-    guild_info = player_data.get("guild")
-    guild = process_guild(guild_info)
+        # Process guild
+        guild_info = player_data.get("guild")
+        guild = process_guild(guild_info)
 
-    # Create player
-    email = player_data.get("email")
-    bio = player_data.get("bio", "")
+        # Create player - usando create para evitar problemas
+        email = player_data.get("email")
+        bio = player_data.get("bio", "")
 
-    Player.objects.get_or_create(
-        nickname=nickname,
-        defaults={
-            "email": email,
-            "bio": bio,
-            "race": race,
-            "guild": guild,
-        }
-    )
+        # Verifica se o jogador já existe
+        if not Player.objects.filter(nickname=nickname).exists():
+            Player.objects.create(
+                nickname=nickname,
+                email=email,
+                bio=bio,
+                race=race,
+                guild=guild,
+            )
+            print(f"Jogador '{nickname}' criado com sucesso")
+        else:
+            # Atualiza o jogador existente
+            player = Player.objects.get(nickname=nickname)
+            player.email = email
+            player.bio = bio
+            player.race = race
+            player.guild = guild
+            player.save()
+            print(f"Jogador '{nickname}' atualizado com sucesso")
 
-    print(f"Jogador '{nickname}' processado com sucesso")
+    except Exception as e:
+        print(f"Erro detalhado ao processar jogador '{nickname}': {e}")
 
 
-def main():
+def main() -> None:
     """Main function to process players from JSON file."""
     try:
         # 1️⃣ Ler o arquivo JSON
